@@ -1,0 +1,11 @@
+# Keep the build context small: only ship code + resources needed at inference.
+test/
+# Exported image tarballs live here for archiving; they must never enter the build context.
+container_images/
+*.tar.gz
+**/*.tar.gz
+**/__pycache__/
+*.pyc
+.git/
+.gitignore
+train.py

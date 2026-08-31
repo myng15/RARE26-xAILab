@@ -1,0 +1,4 @@
+# torch/torchvision from base image. DINOv2 vits.vit_base needs only torch (xformers disabled via env).
+numpy==2.2.6
+pillow==11.3.0
+SimpleITK==2.5.0

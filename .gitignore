@@ -1,0 +1,19 @@
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+env/
+
+# data and model weights are not redistributed here
+data/train/
+data/splits/*.csv
+resources/*.pt
+resources/*.pth
+submission/resources/*.pt
+container_images/
+results/
+*.db
+
+# DINOv2 reference implementation is cloned, not vendored (see README)
+third_party/
+submission/third_party/

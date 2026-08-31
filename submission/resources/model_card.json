@@ -1,0 +1,31 @@
+{
+  "task": "Per-frame Barrett's neoplasia likelihood from stacked endoscopy frames",
+  "architecture": {
+    "backbone": "DINOv2 ViT-B/14 with 4 register tokens, self-supervised pretraining on gastrointestinal endoscopy imagery, input resolution 336",
+    "adaptation": "LoRA (r=32, alpha=64, dropout=0.1) on the attention qkv projections, merged into the backbone weights for deployment",
+    "pooling": "Attention-based multiple-instance pooling over patch tokens (Ilse et al., ICML 2018, Eq. 8): a two-layer scorer (768 -> 128 -> 1) rates each of the 576 patch tokens, scores are softmax-normalised across patches into weights, and the frame embedding is their weighted sum",
+    "head": "Single linear layer on the pooled 768-dimensional embedding"
+  },
+  "training": {
+    "loss": "Focal loss, gamma 2.66, alpha 0.25",
+    "optimizer": "AdamW, learning rate 3.62e-4, weight decay 3.96e-5, cosine schedule, mixed precision",
+    "sampler": "Class-balanced (WeightedRandomSampler)",
+    "augmentation": "Horizontal/vertical flip, 90-degree rotation, mild affine, mild brightness and contrast",
+    "mixup": "In-batch, alpha 0.41",
+    "epochs": 20,
+    "checkpoint": "Final epoch",
+    "seeds": [42, 43, 44, 45, 46]
+  },
+  "ensemble": {
+    "members": 5,
+    "combination": "Arithmetic mean of the per-frame sigmoid outputs"
+  },
+  "inference": {
+    "granularity": "Each frame is scored independently; the output for a frame depends only on that frame and is unaffected by input batching",
+    "output": "One neoplasia likelihood in [0, 1] per input frame"
+  },
+  "environment": {
+    "torch": "2.7.1+cu126",
+    "numpy": "2.2.6"
+  }
+}

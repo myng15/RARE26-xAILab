@@ -1,0 +1,11 @@
+torch==2.7.1
+torchvision==0.22.1
+numpy==2.2.6
+pandas==2.2.3
+scikit-learn==1.6.1
+albumentations==2.0.5
+opencv-python-headless==4.11.0.86
+Pillow==11.1.0
+peft==0.15.2
+SimpleITK==2.4.1
+tqdm==4.67.1
