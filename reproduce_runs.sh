@@ -8,7 +8,7 @@ set -e
 
 SEEDS=(42 43 44 45 46)
 POOLING="${POOLING:-attention}"
-WEIGHTS="${BACKBONE_WEIGHTS:-resources/gastronet_dinov2_vitb.pth}"
+WEIGHTS="${BACKBONE_WEIGHTS:-resources/<gastronet_checkpoint>.pth}"  # set BACKBONE_WEIGHTS to your actual filename
 COMMON=(--data_root data/train --dinov2_repo third_party/dinov2 --backbone_weights "$WEIGHTS" --pooling "$POOLING")
 
 echo "== cross-center transfer =="
