@@ -2,10 +2,6 @@
 
 Ensemble members are combined by averaging their per-frame probabilities, which is how the submitted
 container combines its members.
-
-Usage:
-    python evaluate.py results/predictions_pooled_attention_seed42.csv
-    python evaluate.py results/predictions_pooled_attention_seed4*.csv
 """
 from __future__ import annotations
 
@@ -16,7 +12,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from rare26.metrics import bootstrap_evaluation, compute_metrics
+from validation.metrics import bootstrap_evaluation, compute_metrics
 
 
 def main():

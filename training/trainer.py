@@ -20,9 +20,7 @@ def train_model(model, paths, labels, config, device) -> None:
     """Fit the model in place.
 
     The schedule is fixed: every run trains for exactly ``config.epochs`` with a cosine-decayed learning
-    rate and the final epoch's weights are kept. There is no early stopping and no checkpoint selection,
-    because the only validation signal available during training would come from data the model has
-    already seen, and selecting on it measurably degrades cross-centre performance.
+    rate and the final epoch's weights are kept. There is no early stopping and no checkpoint selection.
     """
     model.to(device).train()
     criterion = FocalLoss(gamma=config.gamma, alpha=config.focal_alpha).to(device)

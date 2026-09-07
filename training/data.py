@@ -28,11 +28,7 @@ def load_split(split_csv: Path, data_root: Path, split: str) -> tuple[np.ndarray
 
 
 def train_transform(img_size: int):
-    """Geometric augmentation plus mild photometric jitter.
-
-    Early neoplasia presents as a subtle colour and texture change, so the photometric range is kept
-    narrow; aggressive colour or blur augmentation risks destroying the signal being learned.
-    """
+    """Geometric augmentation plus mild photometric jitter."""
     return A.Compose([
         A.Resize(img_size, img_size),
         A.HorizontalFlip(p=0.5),
@@ -46,7 +42,7 @@ def train_transform(img_size: int):
 
 
 def eval_transform(img_size: int):
-    """Deterministic resize and normalise, used for validation and for inference."""
+    """Deterministic resize and normalize, used for validation and for inference."""
     return transforms.Compose([
         transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),

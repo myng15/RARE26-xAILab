@@ -9,11 +9,14 @@ data/train/
 data/splits/*.csv
 resources/*.pt
 resources/*.pth
-submission/resources/*.pt
+inference/resources/*.pt
 container_images/
 results/
 *.db
 
 # DINOv2 reference implementation is cloned, not vendored (see README)
 third_party/
-submission/third_party/
+inference/third_party/
+
+# kept locally as a sanity check, not published
+/test/

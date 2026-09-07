@@ -4,6 +4,14 @@ Loads N checkpoints, each a {backbone, head} state dict with LoRA merged into a 
 backbone. For each frame, the backbone's patch tokens are combined by a small attention layer into a single
 embedding, which a linear head maps to a logit. Members' sigmoid outputs are averaged into one likelihood.
 Each frame's likelihood depends only on that frame, so the output is invariant to input batching.
+
+``AttentionPool`` below is our own implementation of the (non-gated) pooling rule of:
+    Ilse, M., Tomczak, J., and Welling, M. "Attention-based Deep Multiple Instance Learning." ICML 2018.
+    https://arxiv.org/abs/1802.04712  (official code: https://github.com/AMLab-Amsterdam/AttentionDeepMIL)
+It follows the paper's Eq. 8 and variable names (``V``, ``w``, also used by the checkpoint keys this file
+loads) but not the reference repository's code: that repository wraps V and the tanh in one
+``nn.Sequential`` inside an MNIST-bags CNN pipeline built for a different task, whereas we score DINOv2
+patch tokens directly with two plain ``nn.Linear`` layers.
 """
 from pathlib import Path
 import sys
@@ -30,7 +38,7 @@ def _build_dinov2_backbone(img_size: int):
 
 class AttentionPool(nn.Module):
     """Attention-based multiple-instance pooling over patch tokens (Ilse et al., ICML 2018, Eq. 8): a
-    small side-network scores each patch, the scores are softmax-normalised across patches into weights,
+    small side-network scores each patch, the scores are softmax-normalized across patches into weights,
     and the frame embedding is their weighted sum."""
 
     def __init__(self, feat_dim: int, hidden_dim: int = 128):

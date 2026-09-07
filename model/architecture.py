@@ -1,4 +1,9 @@
-"""Model: a DINOv2 backbone adapted with LoRA, a patch-token pooling head, and a linear classifier."""
+"""Architecture: a DINOv2 backbone adapted with LoRA, a patch-token pooling head, and a linear head.
+
+``AttentionPool`` below is our own implementation of the (non-gated) pooling rule of:
+    Ilse, M., Tomczak, J., and Welling, M. "Attention-based Deep Multiple Instance Learning." ICML 2018.
+    https://arxiv.org/abs/1802.04712 
+"""
 from __future__ import annotations
 
 import sys
@@ -17,7 +22,7 @@ def _dinov2_repo_on_path(dinov2_repo: Path) -> None:
 
 
 def build_backbone(dinov2_repo: Path, weights: Path | None, img_size: int = IMG_SIZE) -> nn.Module:
-    """DINOv2 ViT-B/14 with 4 register tokens, optionally initialised from a checkpoint.
+    """DINOv2 ViT-B/14 with 4 register tokens, optionally initialized from a checkpoint.
 
     The challenge submission uses GastroNet-5M self-supervised weights, which are gastrointestinal-domain
     rather than natural-image pretrained. Request access and pass the file via ``weights``.
@@ -40,7 +45,7 @@ def build_backbone(dinov2_repo: Path, weights: Path | None, img_size: int = IMG_
 class AttentionPool(nn.Module):
     """Attention-based multiple-instance pooling (Ilse et al., ICML 2018, Eq. 8).
 
-    A small side-network scores every patch token, the scores are softmax-normalised across patches into
+    A small side-network scores every patch token, the scores are softmax-normalized across patches into
     weights, and the frame embedding is their weighted sum. Only image-level labels are used; the
     weighting is learned indirectly from the classification objective.
     """
@@ -66,12 +71,7 @@ POOLINGS = {"attention": AttentionPool, "mean": MeanPool}
 
 
 class NeoplasiaClassifier(nn.Module):
-    """Backbone -> patch-token pooling -> linear head -> one logit per frame.
-
-    Reading the patch tokens rather than the backbone's single whole-image summary token is the part of
-    the design that matters most for this task; the choice of pooling rule on top of them has a much
-    smaller effect, and both rules provided here were submitted to the challenge leaderboard.
-    """
+    """Backbone -> patch-token pooling -> linear head -> one logit per frame."""
 
     def __init__(self, backbone: nn.Module, pooling: str = "attention", feat_dim: int = FEAT_DIM):
         super().__init__()
@@ -89,11 +89,7 @@ class NeoplasiaClassifier(nn.Module):
 
 def add_lora(model: NeoplasiaClassifier, rank: int = 32, alpha: int = 64,
              dropout: float = 0.1) -> NeoplasiaClassifier:
-    """Wrap the backbone's attention qkv projections in LoRA adapters and freeze everything else in it.
-
-    Full fine-tuning overfits a training set with this few positives; adapting a small number of
-    parameters retains the pretrained representation while still allowing the backbone to adapt.
-    """
+    """Wrap the backbone's attention qkv projections in LoRA adapters and freeze everything else in it."""
     from peft import LoraConfig, get_peft_model
 
     config = LoraConfig(r=rank, lora_alpha=alpha, lora_dropout=dropout,
@@ -102,6 +98,29 @@ def add_lora(model: NeoplasiaClassifier, rank: int = 32, alpha: int = 64,
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"trainable parameters: {trainable:,}")
     return model
+
+
+EXPORT_KEY_MAP = {
+    "pool.score_proj.weight": "attn_V.weight",
+    "pool.score_proj.bias": "attn_V.bias",
+    "pool.score_out.weight": "attn_w.weight",
+    "pool.score_out.bias": "attn_w.bias",
+    "head.weight": "head.weight",
+    "head.bias": "head.bias",
+}
+
+
+def export_head_state(model: NeoplasiaClassifier) -> dict:
+    """The pooling and classifier weights, keyed the way the container expects to read them."""
+    head_state = {}
+    for key, value in model.state_dict().items():
+        if key.startswith("backbone."):
+            continue
+        if key not in EXPORT_KEY_MAP:
+            raise KeyError(f"{key!r} has no name in the container's checkpoint format; "
+                           f"expected one of {sorted(EXPORT_KEY_MAP)}")
+        head_state[EXPORT_KEY_MAP[key]] = value
+    return head_state
 
 
 def export_for_inference(model: NeoplasiaClassifier, path: Path, img_size: int = IMG_SIZE,
@@ -113,8 +132,7 @@ def export_for_inference(model: NeoplasiaClassifier, path: Path, img_size: int =
     """
     model.eval()
     merged = model.backbone.merge_and_unload()
-    head_state = {k: v for k, v in model.state_dict().items() if not k.startswith("backbone.")}
-    torch.save({"backbone": merged.state_dict(), "head": head_state,
+    torch.save({"backbone": merged.state_dict(), "head": export_head_state(model),
                 "pooling": model.pooling_name, "img_size": img_size,
                 "feat_dim": model.head.in_features,
                 "mean": list(mean), "std": list(std)}, path)

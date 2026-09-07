@@ -1,30 +1,24 @@
 # RARE26 Challenge — xAILab
 
-Code for the xAILab entry to the [RARE26 challenge](https://rare26.grand-challenge.org/): per-frame
-detection of Barrett's neoplasia in endoscopy images.
+Code for the xAILab Bamberg team to the [RARE26 challenge (MICCAI 2026)](https://rare26.grand-challenge.org/): early-stage, low-prevalence cancer detection (Barrett’s Esophagus neoplasia) in endoscopy images.
 
-The repository covers the complete method — data splitting, training, evaluation, and the inference
-container that is submitted to the challenge platform. The submission container layout follows the
-[example submission repository](https://github.com/TUE-VCA/RARE25-Submission) provided by the organisers.
+The repository covers the complete method: data splitting, training, validation, and the inference container submitted to the challenge platform. The container layout follows the
+[example submission repository](https://github.com/TUE-ARIA/RARE25-Submission) provided by the challenge organizers.
 
-## Method
+<!-- ## Method
 
-A DINOv2 ViT-B/14 backbone with 4 register tokens, self-supervised pretrained on gastrointestinal
-endoscopy imagery, adapted with LoRA on the attention `qkv` projections and fitted with focal loss.
+A **DINOv2 ViT-B/14** backbone with 4 register tokens, self-supervised pretrained on gastrointestinal
+endoscopy imagery, adapted with **LoRA** on the attention `qkv` projections and fitted with **focal loss**.
 
-The design choice that matters most for this task is reading the backbone's **patch tokens** rather than
-its single whole-image summary token, and pooling them into a frame embedding. Neoplasia is often a small,
-localised region of an otherwise unremarkable frame, and a whole-image summary dilutes it. Two pooling
-rules are provided and both were submitted to the leaderboard:
+The design choice that matters most is reading the backbone's **patch tokens** rather than its single
+whole-image CLS token. Neoplasia is often a small, localized region of an otherwise normal-looking
+frame, and a whole-image summary dilutes it. The patch tokens are combined into a frame embedding by
+**attention-based multiple-instance pooling** (Ilse et al., ICML 2018, Eq. 8): a small side-network scores
+every patch, the scores are softmax-normalized across patches into weights, and the embedding is their weighted sum. The pooling is trained from image-level labels only; no lesion annotations are used.
 
-- `attention` — attention-based multiple-instance pooling (Ilse et al., ICML 2018, Eq. 8). A small
-  side-network scores each patch, the scores are softmax-normalised into weights, and the embedding is
-  their weighted sum. Trained from image-level labels only.
-- `mean` — an unweighted mean over patch tokens, with no learned pooling parameters.
-
-The final prediction averages the per-frame probabilities of five models trained with different random
-seeds. Every frame is scored independently, so the output does not depend on how the platform batches the
-test set.
+The final prediction averages the per-frame probabilities of **five models trained with different random
+seeds**. Every frame is scored independently, so the output does not depend on how the platform batches
+the test set. -->
 
 ## 1. Environment
 
@@ -34,25 +28,22 @@ conda activate rare26
 pip install -r requirements.txt
 ```
 
-Clone the DINOv2 reference implementation, which supplies the backbone definition. It is not vendored
-here; the same checkout is used for training and for the container build:
+Clone the DINOv2 reference implementation, which supplies the backbone definition. The same checkout is used for training and the container build:
 
 ```bash
 git clone https://github.com/facebookresearch/dinov2.git third_party/dinov2
-cp -r third_party submission/third_party    # the container build copies this into the image
+cp -r third_party inference/third_party    # the container build copies this into the image
 ```
 
 ## 2. Data
 
-Place the challenge training set under `data/train`, organised as `<center>/<class>/<image>.png` with
-class directories named `ndbe` (non-dysplastic Barrett's oesophagus) and `neo` (neoplasia).
+Place the challenge training set under `data/train`, organized as `<center>/<class>/<image>.png`, with
+class directories named `ndbe` (non-dysplastic Barrett's esophagus) and `neo` (neoplasia).
 
-The backbone is initialised from [GastroNet-5M](https://huggingface.co/tgwboers/GastroNet-5M_Pretrained_Weights)
-self-supervised weights; access must be requested from that repository. Place the checkpoint in
-`resources/` and point `--backbone_weights` at it. Training also runs from a randomly initialised or
-generically pretrained backbone, at reduced accuracy.
+The backbone is initialized from [GastroNet-5M](https://huggingface.co/tgwboers/GastroNet-5M_Pretrained_Weights) self-supervised weights; access must be requested there. Place the checkpoint in `resources/` and pass it
+via `--backbone_weights`. 
 
-## 3. Splits
+## 3. Data splitting
 
 ```bash
 python data_splitting/create_splits.py
@@ -62,34 +53,42 @@ writes four CSVs to `data/splits`:
 
 | file | purpose |
 |---|---|
-| `center1_train_center2_test.csv` | train on centre 1, evaluate on centre 2 |
-| `center2_train_center1_test.csv` | train on centre 2, evaluate on centre 1 |
-| `pooled_holdout.csv` | both centres pooled, held-out slice stratified by centre and label |
+| `center1_train_center2_test.csv` | train on center 1, evaluate on center 2 |
+| `center2_train_center1_test.csv` | train on center 2, evaluate on center 1 |
+| `pooled_holdout.csv` | both centers pooled, held-out slice stratified by center and label |
 | `5fold_cv.csv` | stratified 5-fold cross-validation |
 
-The cross-centre splits measure transfer to an unseen centre. The pooled split matches the condition the
-deployed model is trained under — the final model is fitted on both centres — and is the split used to
-decide whether a change is adopted. A change can help on one cross-centre direction and not survive
-pooled training, so both are reported.
+The cross-center splits measure transfer to an unseen center. The pooled split matches the condition the deployed model is trained under (the final model is fitted on all available data from both centers) and is the split used to
+confirm whether a change is adopted. A change can help on one cross-center direction and not survive pooled training, so both are reported.
 
-## 4. Training and evaluation
+The 5-fold split is reported alongside the other splits for reference, but is not used to decide whether a candidate change is adopted.
+
+## 4. Training
 
 ```bash
-# transfer to an unseen centre
-python train.py --split cross_center --split_csv data/splits/center2_train_center1_test.csv --seed 42
+# the cross-center generalizability evaluation
+python -m training.run_training --split cross_center \
+    --split_csv data/splits/center2_train_center1_test.csv --seed 42
 
 # the pooled held-out evaluation
-python train.py --split pooled --seed 42
+python -m training.run_training --split pooled --seed 42
 
-# a deployable checkpoint, trained on every labelled image
-python train.py --split final --seed 42 --export submission/resources/dinov2_lora_attnmil_neoplasia_seed42.pt
+# a deployable checkpoint, trained on every labeled image
+python -m training.run_training --split final --seed 42 \
+    --export "inference/resources/dinov2_lora_attnmil_neoplasia_seed42.pt"
 ```
 
-Add `--pooling mean` for the mean-pooling variant. Each evaluating run writes per-frame predictions,
-point-estimate metrics and a bootstrap interval to `results/`.
+Each evaluating run writes per-frame predictions, point-estimate metrics, and a bootstrap interval to `results/`. The bootstrap follows the same resampling scheme the challenge platform uses to score the leaderboard (see `validation/metrics.py`, §5 below), so these local intervals are comparable to it.
 
-`python evaluate.py results/predictions_*.csv` scores one prediction file, or averages several into an
-ensemble and scores that.
+## 5. Validation
+
+```bash
+python -m validation.run_validation results/predictions_pooled_attention_seed*.csv
+```
+
+scores one prediction file, or averages several into an ensemble and scores that.
+
+The challenge scores the median, over bootstrap resamples at ~1% prevalence, of the positive predictive value at 90% recall (PPV@90%Recall). `validation/metrics.py` reproduces that resampling scheme so local numbers are comparable to the leaderboard, and additionally reports AUROC, AUPRC, the false positive rate at 90% recall, and a partial AUC over a band of the ROC curve near the operating point (pAUC@90%Recall).
 
 To reproduce every run behind the submission:
 
@@ -97,43 +96,32 @@ To reproduce every run behind the submission:
 BACKBONE_WEIGHTS=resources/gastronet_dinov2_vitb.pth ./reproduce_runs.sh
 ```
 
-### Metrics
-
-The challenge scores the median, over bootstrap resamples at roughly 1% prevalence, of the positive
-predictive value at 90% recall. `rare26/metrics.py` reproduces that resampling scheme so local numbers are
-comparable to the leaderboard, and additionally reports AUROC, average precision, the false-positive rate
-at 90% recall, and a partial AUC over a band of the ROC curve near the operating point. The partial AUC is
-reported over a narrow band as well as the conventional `[0.90, 1.00]`: with few positives in an
-evaluation set, the top of that band is determined by the handful of hardest positives and tracks the
-challenge metric poorly.
-
-## 5. Submission container
+## 6. Submission container
 
 ```bash
-cd submission
-# needs submission/third_party/dinov2 and the checkpoints in submission/resources
+cd inference
+# needs inference/third_party/dinov2 and the checkpoints in inference/resources
 ./do_build.sh        # build the image
-./do_test_run.sh     # run it on the bundled example input
 ./do_save.sh         # write the tarball to upload
 ```
-
-`submission/resources/` must contain the exported checkpoints; see the README there.
 
 ## Repository layout
 
 ```
 data_splitting/create_splits.py   split definitions
-rare26/config.py                  hyperparameters of the submitted configuration
-rare26/data.py                    datasets, transforms, class-balanced sampling
-rare26/model.py                   backbone, LoRA adaptation, pooling heads, checkpoint export
-rare26/losses.py                  focal loss, MixUp
-rare26/train.py                   training and prediction loops
-rare26/metrics.py                 challenge metrics and bootstrap evaluation
-train.py                          train one model under one protocol
-evaluate.py                       score predictions, single or ensembled
-reproduce_runs.sh                 every run behind the submission
-submission/                       inference container
+model/architecture.py             backbone, LoRA adaptation, pooling, checkpoint export
+model/config.py                   hyperparameters of the submitted configuration
+training/data.py                  datasets, transforms, class-balanced sampling
+training/losses.py                focal loss, MixUp
+training/trainer.py               training and prediction loops
+training/run_training.py          train one model under one evaluation protocol
+validation/metrics.py             challenge metrics and bootstrap evaluation
+validation/run_validation.py      score predictions, single or ensembled
+inference/                        submission container
+reproduce_runs.sh                 reproduce every run behind the submission
 ```
+
+`model/architecture.py` also contains an unweighted mean-pooling head, selectable with `--pooling mean`, which was used during development as a reference point for the attention head.
 
 ## License
 

@@ -1,8 +1,7 @@
 """Evaluation metrics.
 
 The challenge scores the median, over bootstrap resamples at roughly 1% prevalence, of the positive
-predictive value at 90% recall. That is a two-sided tail statistic: the operating point is set by the
-weakest tenth of the positives, and the score is then determined by how many negatives outrank it.
+predictive value at 90% recall (PPV@90Recall). 
 
 ``bootstrap_evaluation`` reproduces the challenge's own resampling scheme so local numbers are comparable
 to the leaderboard. ``partial_auc_high_sensitivity`` integrates specificity over a band of the ROC curve
@@ -20,12 +19,8 @@ _trapezoid = getattr(np, "trapezoid", np.trapz)
 
 def partial_auc_high_sensitivity(y_true, y_score, min_tpr: float = 0.90,
                                  max_tpr: float = 1.00) -> float:
-    """Normalised partial AUC over a true-positive-rate band: mean specificity while sensitivity is in
+    """Normalized partial AUC over a true-positive-rate band: mean specificity while sensitivity is in
     ``[min_tpr, max_tpr]``. Rank-based, so it needs no calibration.
-
-    Narrowing the band around the operating point the challenge scores makes this track the challenge
-    metric more closely than the full ``[0.90, 1.00]`` band does when the evaluation set has few
-    positives, because the top of that band is determined by the handful of hardest positives.
     """
     fpr, tpr, _ = roc_curve(y_true, y_score)
     fpr_lo = float(np.interp(min_tpr, tpr, fpr))
@@ -54,7 +49,7 @@ def compute_metrics(y_true, y_score) -> dict:
         "PPV@90Recall": ppv_at_recall(y_true, y_score),
         "FPR@90Recall": fpr_at_recall(y_true, y_score),
         "pAUC@90Recall": partial_auc_high_sensitivity(y_true, y_score),
-        "pAUC[0.86,0.90]": partial_auc_high_sensitivity(y_true, y_score, 0.86, 0.90),
+        "pAUC[0.86,0.90]": partial_auc_high_sensitivity(y_true, y_score, 0.86, 0.90), 
     }
 
 
@@ -63,8 +58,7 @@ def bootstrap_evaluation(y_true, y_score, n_bootstrap: int = 1000, imbalance_rat
     """Median and 95% interval of each metric under the challenge's resampling scheme.
 
     Every iteration keeps all negatives fixed and resamples the positives, with replacement, down to
-    ``n_negatives / imbalance_ratio``. That holds the prevalence at roughly 1% while letting the interval
-    reflect the scarce positive class, which dominates the variance.
+    ``n_negatives / imbalance_ratio``, holding the prevalence at roughly 1%.
     """
     y_true = np.asarray(y_true).astype(int)
     y_score = np.asarray(y_score, dtype=float)

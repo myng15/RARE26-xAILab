@@ -2,15 +2,10 @@
 
 Three protocols are supported, selected with ``--split``:
 
-``cross_center``  train on one centre, evaluate on the other. Measures transfer to an unseen centre.
-``pooled``        train on both centres, evaluate on a held-out slice of the same mixture. This is the
-                  condition the deployed model is trained under and the one used to decide adoption.
-``final``         train on every labelled image and export a deployable checkpoint. No evaluation.
-
-Usage:
-    python train.py --split pooled --seed 42
-    python train.py --split cross_center --split_csv data/splits/center2_train_center1_test.csv
-    python train.py --split final --seed 42 --export resources/model_seed42.pt
+``cross_center``  train on one center, evaluate on the other. Measures transfer to an unseen center.
+``pooled``        train on both centers, evaluate on a held-out slice of the same mixture. This is the
+                  condition the deployed model is trained under and the one used to confirm whether a change is adopted.
+``final``         train on every labeled image and export a deployable checkpoint. No evaluation.
 """
 from __future__ import annotations
 
@@ -23,11 +18,11 @@ import numpy as np
 import pandas as pd
 import torch
 
-from rare26.config import DEFAULT
-from rare26.data import load_split
-from rare26.metrics import bootstrap_evaluation, compute_metrics
-from rare26.model import NeoplasiaClassifier, add_lora, build_backbone, export_for_inference
-from rare26.train import predict, train_model
+from model import DEFAULT
+from training.data import load_split
+from validation.metrics import bootstrap_evaluation, compute_metrics
+from model import NeoplasiaClassifier, add_lora, build_backbone, export_for_inference
+from training.trainer import predict, train_model
 
 
 def build(config, args, device):

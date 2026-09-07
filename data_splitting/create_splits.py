@@ -1,28 +1,21 @@
 """Generate the data splits used for training and validation.
 
-The RARE26 training set contains images from two centres. Four split definitions are produced, each as a
-CSV in ``data/splits``:
+Four split definitions, each saved as a CSV in ``data/splits``:
 
-``center1_train_center2_test.csv``  train on centre 1, evaluate on centre 2
-``center2_train_center1_test.csv``  train on centre 2, evaluate on centre 1
-``pooled_holdout.csv``              both centres pooled for training, with a held-out slice stratified
-                                    jointly by centre and label
+``center1_train_center2_test.csv``  train on center 1, evaluate on center 2
+``center2_train_center1_test.csv``  train on center 2, evaluate on center 1
+``pooled_holdout.csv``              both centers pooled for training, with a held-out slice stratified
+                                    jointly by center and label
 ``5fold_cv.csv``                    stratified 5-fold cross-validation over all images
-
-The two cross-centre splits measure transfer to an unseen centre. The pooled split matches the condition
-the deployed model is trained under, since the final model is fitted on both centres; it is the split used
-to decide whether a change is adopted.
 
 Each CSV has the columns:
     image_path   path to the image, relative to the data root
     sample_id    file name, unique per image
     center       ``center_1`` or ``center_2``
-    class_name   ``ndbe`` (non-dysplastic Barrett's oesophagus) or ``neo`` (neoplasia)
+    class_name   ``ndbe`` (non-dysplastic Barrett's esophagus) or ``neo`` (neoplasia)
     target       0 for ndbe, 1 for neo
     split        ``train`` or ``test`` (``fold_0`` .. ``fold_4`` for cross-validation)
 
-Usage:
-    python data_splitting/create_splits.py --data_root data/train --out_dir data/splits
 """
 from __future__ import annotations
 
@@ -48,8 +41,8 @@ def enumerate_images(data_root: Path) -> pd.DataFrame:
                     "image_path": str(image.relative_to(data_root)),
                     "sample_id": image.name,
                     "center": center_dir.name,
-                    "class_name": class_name,
-                    "target": target,
+                    "class_name": class_name, 
+                    "target": target, 
                 })
     if not rows:
         raise FileNotFoundError(
@@ -64,10 +57,7 @@ def cross_center_split(df: pd.DataFrame, train_center: str, test_center: str) ->
 
 
 def pooled_holdout_split(df: pd.DataFrame, test_fraction: float, seed: int) -> pd.DataFrame:
-    """Hold out a slice of the pooled data, stratified jointly by centre and label.
-
-    Stratifying on the pair rather than on the label alone keeps both centres proportionally represented
-    in the held-out slice, so the slice reflects the mixture the model is trained on.
+    """Hold out a slice of the pooled data, stratified jointly by center and label.
     """
     out = df.copy()
     stratify_key = out.center + "_" + out.target.astype(str)
